@@ -2,65 +2,75 @@ name: TikTok Live Check
 
 on:
   schedule:
-    # Pārbaude ik pēc 10 minūtēm
+    # Pārbauda ik pēc 10 minūtēm
     - cron: "*/10 * * * *"
 
-  # Ļauj palaist manuāli no GitHub Actions
+  # Ļauj palaist manuāli
   workflow_dispatch:
 
+# Atļauja GitHub Actions mainīt live_status.json
 permissions:
   contents: write
 
 jobs:
   check-live:
-
     runs-on: ubuntu-latest
 
     steps:
 
-      # ======================================================
-      # CHECKOUT
-      # ======================================================
-
+      # ==============================
+      # 1. Lejupielādē repository
+      # ==============================
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ======================================================
-      # PYTHON
-      # ======================================================
-
+      # ==============================
+      # 2. Uzstāda Python
+      # ==============================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
-      # ======================================================
-      # INSTALL
-      # ======================================================
-
+      # ==============================
+      # 3. Uzinstalē Python bibliotēkas
+      # ==============================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ======================================================
-      # RUN BOT
-      # ======================================================
+      # ==============================
+      # 4. Pārbauda, vai Discord Secret
+      #    tiešām ir pieejams
+      # ==============================
+      - name: Check Discord secret
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "❌ DISCORD_WEBHOOK_URL nav pieejams workflow!"
+            echo "Pārbaudi: Settings → Secrets and variables → Actions → Repository secrets"
+            exit 1
+          else
+            echo "✅ DISCORD_WEBHOOK_URL ir pieejams workflow."
+          fi
 
+      # ==============================
+      # 5. Pārbauda TikTok LIVE
+      # ==============================
       - name: Check TikTok LIVE
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python tiktok_bot.py
 
-      # ======================================================
-      # SAVE STATUS
-      # ======================================================
-
+      # ==============================
+      # 6. Saglabā live_status.json
+      # ==============================
       - name: Save live_status.json
         run: |
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
