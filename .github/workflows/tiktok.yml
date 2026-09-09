@@ -1,8 +1,10 @@
-name: TikTok Live Check
+
+name: TikTok LIVE Monitor
 
 on:
   schedule:
     - cron: "*/10 * * * *"
+
   workflow_dispatch:
 
 permissions:
@@ -12,39 +14,60 @@ jobs:
   check-live:
     runs-on: ubuntu-latest
 
-    env:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-
     steps:
+
+      # ================================
+      # 1. Ielādē repozitoriju
+      # ================================
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      # ================================
+      # 2. Python
+      # ================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: "3.11"
 
+      # ================================
+      # 3. Instalē bibliotēkas
+      # ================================
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install TikTokLive requests
 
-      - name: Check Discord secret
-        shell: bash
-        run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            echo "✅ DISCORD_WEBHOOK_URL ir pieejams."
-          else
-            echo "❌ DISCORD_WEBHOOK_URL ir tukšs!"
-            exit 1
-          fi
-
-      - name: Check TikTok LIVE
+      # ================================
+      # 4. Palaiž TikTok botu
+      # ================================
+      - name: Run TikTok LIVE bot
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python tiktok_bot.py
 
-      - name: Save live_status.json
+      # ================================
+      # 5. Pārbauda statusa failu
+      # ================================
+      - name: Check live status
+        run: |
+          echo "===== live_status.json ====="
+
+          if [ -f live_status.json ]; then
+            cat live_status.json
+          else
+            echo "live_status.json nav atrasts"
+          fi
+
+          echo "============================"
+
+      # ================================
+      # 6. Saglabā statusu GitHub
+      # ================================
+      - name: Save live status
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -52,9 +75,9 @@ jobs:
           git add live_status.json
 
           if git diff --cached --quiet; then
-            echo "ℹ️ Nav izmaiņu live_status.json"
+            echo "Nav izmaiņu — commit nav nepieciešams."
           else
-            git commit -m "Update TikTok live status"
+            git commit -m "Update TikTok LIVE status"
             git push
-            echo "✅ live_status.json saglabāts GitHub."
           fi
+
