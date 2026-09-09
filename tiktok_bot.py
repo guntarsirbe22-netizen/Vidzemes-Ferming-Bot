@@ -1,9 +1,9 @@
-
+```python
 import asyncio
 import json
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from TikTokLive import TikTokLiveClient
@@ -28,20 +28,22 @@ DISCORD_WEBHOOK_URL = os.getenv(
 
 BOT_NAME = "Farming Vidzeme"
 
+# Discord embed krāsa
+DISCORD_COLOR = 0x57B657
+
 
 # ============================================================
-# IELĀDĒ IEPRIEKŠĒJO STATUSU
+# STATUSA IELĀDE
 # ============================================================
 
 def load_status():
+
     default_status = {
         user: False
         for user in USERS
     }
 
     if not os.path.exists(STATUS_FILE):
-        print("📁 live_status.json nav atrasts.")
-        print("📁 Tiek izmantots sākuma OFFLINE statuss.")
         return default_status
 
     try:
@@ -54,6 +56,7 @@ def load_status():
             data = json.load(file)
 
         for user in USERS:
+
             if isinstance(
                 data.get(user),
                 bool
@@ -63,8 +66,9 @@ def load_status():
         return default_status
 
     except Exception as error:
+
         print(
-            f"⚠️ Kļūda lasot {STATUS_FILE}: "
+            f"⚠️ Neizdevās nolasīt {STATUS_FILE}: "
             f"{type(error).__name__}: {error}"
         )
 
@@ -72,13 +76,15 @@ def load_status():
 
 
 # ============================================================
-# SAGLABĀ STATUSU
+# STATUSA SAGLABĀŠANA
 # ============================================================
 
 def save_status(status):
+
     temp_path = None
 
     try:
+
         directory = os.path.dirname(
             os.path.abspath(STATUS_FILE)
         )
@@ -111,6 +117,7 @@ def save_status(status):
         print("💾 STATUSS SAGLABĀTS")
 
         for user in USERS:
+
             if status.get(user, False):
                 print(f"🔴 @{user}: LIVE")
             else:
@@ -119,12 +126,14 @@ def save_status(status):
         return True
 
     except Exception as error:
+
         print(
             f"❌ Neizdevās saglabāt statusu: "
             f"{type(error).__name__}: {error}"
         )
 
         if temp_path and os.path.exists(temp_path):
+
             try:
                 os.remove(temp_path)
             except OSError:
@@ -134,17 +143,26 @@ def save_status(status):
 
 
 # ============================================================
-# PĀRBAUDA TIKTOK LIVE
+# TIKTOK LIVE PĀRBAUDE
 # ============================================================
 
 async def check_user_live(username):
 
     print()
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"👤 Pārbaudu @{username}")
-    print("🌐 TikTokLive: pārbaudu LIVE statusu...")
+    print(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    print(
+        f"👤 Pārbaudu @{username}"
+    )
+
+    print(
+        "🌐 TikTokLive: pārbaudu LIVE statusu..."
+    )
 
     try:
+
         client = TikTokLiveClient(
             unique_id=username
         )
@@ -152,6 +170,7 @@ async def check_user_live(username):
         is_live = await client.is_live()
 
         if is_live:
+
             print(
                 f"🔴 @{username} IR LIVE!"
             )
@@ -182,32 +201,127 @@ async def check_user_live(username):
 
 
 # ============================================================
-# NOSŪTA DISCORD PAZIŅOJUMU
+# TIKTOK AVATARA IEGŪŠANA
 # ============================================================
 
-def send_discord_notification(username):
+async def get_avatar(username):
+
+    try:
+
+        client = TikTokLiveClient(
+            unique_id=username
+        )
+
+        avatar = await client.get_avatar_url()
+
+        if avatar:
+            return avatar
+
+    except Exception as error:
+
+        print(
+            f"⚠️ Neizdevās iegūt @{username} avataru: "
+            f"{type(error).__name__}: {error}"
+        )
+
+    return None
+
+
+# ============================================================
+# DISCORD LIVE PAZIŅOJUMS
+# ============================================================
+
+def send_discord_notification(
+    username,
+    avatar_url=None
+):
 
     if not DISCORD_WEBHOOK_URL:
+
         print(
             "❌ DISCORD_WEBHOOK_URL nav pieejams!"
         )
+
         return False
 
-    tiktok_url = (
+
+    tiktok_live_url = (
         f"https://www.tiktok.com/@{username}/live"
     )
 
-    message = (
-        f"🔴 **TIKTOK LIVE!**\n\n"
-        f"**@{username}** ir sācis TikTok LIVE!\n\n"
-        f"🎥 Skatīties tiešraidi:\n"
-        f"{tiktok_url}"
+    tiktok_profile_url = (
+        f"https://www.tiktok.com/@{username}"
     )
 
-    payload = {
-        "content": message,
-        "username": BOT_NAME
+
+    # ========================================================
+    # DISCORD EMBED
+    # ========================================================
+
+    embed = {
+
+        "title": "🔴  TIKTOK LIVE",
+
+        "description": (
+            f"## 🚜 Farming Vidzeme\n\n"
+            f"**@{username}** ir sācis tiešraidi!\n\n"
+            f"🔴 **STATUSS:** LIVE"
+        ),
+
+        "color": DISCORD_COLOR,
+
+        "fields": [
+
+            {
+                "name": "👤 TikTok",
+                "value": (
+                    f"[@{username}]"
+                    f"({tiktok_profile_url})"
+                ),
+                "inline": True
+            },
+
+            {
+                "name": "🔴 Statuss",
+                "value": "🟢 **LIVE**",
+                "inline": True
+            },
+
+            {
+                "name": "🎥 Tiešraide",
+                "value": (
+                    f"[▶️ SKATĪTIES TIEŠRAIDI]"
+                    f"({tiktok_live_url})"
+                ),
+                "inline": False
+            }
+        ],
+
+        "footer": {
+            "text": "🌾 Farming Vidzeme • TikTok LIVE"
+        }
     }
+
+
+    # Avataru pievienojam tikai tad,
+    # ja tas tiešām ir pieejams.
+
+    if avatar_url:
+
+        embed["thumbnail"] = {
+            "url": avatar_url
+        }
+
+
+    payload = {
+
+        "username": BOT_NAME,
+
+        "embeds": [
+            embed
+        ]
+    }
+
 
     try:
 
@@ -221,6 +335,7 @@ def send_discord_notification(username):
             f"📡 Discord HTTP: {response.status_code}"
         )
 
+
         if 200 <= response.status_code < 300:
 
             print(
@@ -228,6 +343,7 @@ def send_discord_notification(username):
             )
 
             return True
+
 
         print(
             "❌ Discord kļūda:"
@@ -239,10 +355,11 @@ def send_discord_notification(username):
 
         return False
 
+
     except requests.RequestException as error:
 
         print(
-            f"❌ Discord savienojuma kļūda:"
+            "❌ Discord savienojuma kļūda:"
         )
 
         print(
@@ -253,7 +370,7 @@ def send_discord_notification(username):
 
 
 # ============================================================
-# APSTRĀDĀ VIENU TIKTOK LIETOTĀJU
+# LIETOTĀJA APSTRĀDE
 # ============================================================
 
 async def process_user(
@@ -265,8 +382,9 @@ async def process_user(
         username
     )
 
+
     # --------------------------------------------------------
-    # TikTok statusu nevarēja noteikt
+    # Statusu nevar noteikt
     # --------------------------------------------------------
 
     if current_status is None:
@@ -285,7 +403,7 @@ async def process_user(
 
 
     # --------------------------------------------------------
-    # LIETOTĀJS NAV LIVE
+    # OFFLINE
     # --------------------------------------------------------
 
     if current_status is False:
@@ -307,13 +425,10 @@ async def process_user(
 
 
     # --------------------------------------------------------
-    # LIETOTĀJS IR LIVE
+    # LIVE
     # --------------------------------------------------------
 
     if current_status is True:
-
-        # Ja iepriekš jau bija LIVE,
-        # jaunu Discord ziņu nesūtām.
 
         if previous_status:
 
@@ -325,26 +440,29 @@ async def process_user(
             return True
 
 
-        # ----------------------------------------------------
-        # LIVE tikko sākās
-        # ----------------------------------------------------
-
         print(
             f"🚨 @{username} TIKKO SĀKA LIVE!"
         )
 
         print(
-            "📨 Sūtu paziņojumu uz Discord..."
+            "📨 Gatavo Discord paziņojumu..."
         )
 
-        discord_sent = send_discord_notification(
+
+        # Iegūstam TikTok avataru
+
+        avatar_url = await get_avatar(
             username
         )
 
 
-        # ----------------------------------------------------
-        # Discord veiksmīgi saņēma ziņu
-        # ----------------------------------------------------
+        # Nosūtām Discord
+
+        discord_sent = send_discord_notification(
+            username,
+            avatar_url
+        )
+
 
         if discord_sent:
 
@@ -356,17 +474,13 @@ async def process_user(
             return True
 
 
-        # ----------------------------------------------------
-        # Discord ziņu neizdevās nosūtīt
-        # ----------------------------------------------------
-
         print(
-            f"⚠️ @{username}: "
-            f"Discord paziņojums neizdevās."
+            "⚠️ Discord paziņojums neizdevās."
         )
 
         print(
-            "⚠️ LIVE statuss netiek saglabāts."
+            f"⚠️ @{username}: "
+            f"LIVE statuss netiek saglabāts."
         )
 
         return False
@@ -376,26 +490,37 @@ async def process_user(
 
 
 # ============================================================
-# GALVENĀ PROGRAMMA
+# GALVENĀ FUNKCIJA
 # ============================================================
 
 async def main():
 
     print()
-    print("🤖 Farming Vidzeme")
-    print("📡 TikTok LIVE → Discord")
-    print("⚙️ GitHub Actions režīms")
+    print(
+        "🤖 Farming Vidzeme"
+    )
+
+    print(
+        "📡 TikTok LIVE → Discord"
+    )
+
+    print(
+        "⚙️ GitHub Actions režīms"
+    )
+
     print()
 
     print(
         "🔄 PĀRBAUDU TIKTOK TIEŠRAIDES"
     )
 
-    now = datetime.now()
+    now = datetime.now(
+        timezone.utc
+    )
 
     print(
         now.strftime(
-            "%Y-%m-%d %H:%M:%S"
+            "%Y-%m-%d %H:%M:%S UTC"
         )
     )
 
@@ -403,7 +528,7 @@ async def main():
 
 
     # ========================================================
-    # DISCORD WEBHOOK PĀRBAUDE
+    # DISCORD WEBHOOK
     # ========================================================
 
     if DISCORD_WEBHOOK_URL:
@@ -418,19 +543,13 @@ async def main():
             "❌ Discord webhook nav pieejams!"
         )
 
-        print(
-            "❌ Pārbaude tiks turpināta, "
-            "bet Discord ziņu nosūtīt nevarēs."
-        )
-
 
     # ========================================================
-    # IELĀDĒ IEPRIEKŠĒJO STATUSU
+    # IEPRIEKŠĒJAIS STATUSS
     # ========================================================
 
     previous_status = load_status()
 
-    print()
     print(
         "📁 IEPRIEKŠĒJAIS STATUSS:"
     )
@@ -439,7 +558,10 @@ async def main():
 
         state = (
             "LIVE"
-            if previous_status.get(user, False)
+            if previous_status.get(
+                user,
+                False
+            )
             else "OFFLINE"
         )
 
@@ -449,10 +571,11 @@ async def main():
 
 
     # ========================================================
-    # PĀRBAUDA VISUS LIETOTĀJUS
+    # JAUNAIS STATUSS
     # ========================================================
 
     new_status = {}
+
 
     for username in USERS:
 
@@ -470,10 +593,11 @@ async def main():
 
 
     # ========================================================
-    # SAGLABĀ JAUNO STATUSU
+    # SAGLABĀ
     # ========================================================
 
     print()
+
     print(
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
@@ -491,14 +615,16 @@ async def main():
     )
 
     print()
+
     print(
         "🏁 PĀRBAUDE PABEIGTA"
     )
 
 
 # ============================================================
-# STARTĒ PROGRAMMU
+# STARTS
 # ============================================================
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
