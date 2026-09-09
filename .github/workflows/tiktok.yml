@@ -1,4 +1,3 @@
-
 name: TikTok LIVE Monitor
 
 on:
@@ -7,77 +6,106 @@ on:
 
   workflow_dispatch:
 
+# Ļoti svarīgi:
+# neļauj divām botu pārbaudēm darboties vienlaikus.
+concurrency:
+  group: tiktok-live-monitor
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
+
   check-live:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # ================================
-      # 1. Ielādē repozitoriju
-      # ================================
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ================================
-      # 2. Python
-      # ================================
+
+      # ==========================================
+      # PYTHON
+      # ==========================================
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ================================
-      # 3. Instalē bibliotēkas
-      # ================================
+
+      # ==========================================
+      # BIBLIOTĒKAS
+      # ==========================================
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install TikTokLive requests
 
-      # ================================
-      # 4. Palaiž TikTok botu
-      # ================================
+
+      # ==========================================
+      # TIKTOK BOT
+      # ==========================================
+
       - name: Run TikTok LIVE bot
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python tiktok_bot.py
 
-      # ================================
-      # 5. Pārbauda statusa failu
-      # ================================
-      - name: Check live status
+
+      # ==========================================
+      # PARĀDA STATUSU LOGĀ
+      # ==========================================
+
+      - name: Show live status
         run: |
-          echo "===== live_status.json ====="
+          echo "=========================================="
+          echo "TikTok LIVE STATUS"
+          echo "=========================================="
 
           if [ -f live_status.json ]; then
             cat live_status.json
           else
-            echo "live_status.json nav atrasts"
+            echo "live_status.json nav atrasts!"
           fi
 
-          echo "============================"
+          echo "=========================================="
 
-      # ================================
-      # 6. Saglabā statusu GitHub
-      # ================================
+
+      # ==========================================
+      # SAGLABĀ STATUSU GITHUB
+      # ==========================================
+
       - name: Save live status
         run: |
+
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add live_status.json
 
           if git diff --cached --quiet; then
-            echo "Nav izmaiņu — commit nav nepieciešams."
-          else
-            git commit -m "Update TikTok LIVE status"
-            git push
-          fi
 
+            echo "ℹ️ Statuss nav mainījies."
+
+          else
+
+            git commit \
+              -m "Update TikTok LIVE status"
+
+            git push
+
+          fi
